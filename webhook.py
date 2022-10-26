@@ -39,40 +39,6 @@ def load_config():
         sys.exit()
 
 
-def send_slack_notification():
-    sns_headers = request.headers
-    sns_payload = request.get_json()
-
-    print(json.dumps(sns_headers, indent=4))
-    print(json.dumps(sns_payload, indent=4))
-
-    return make_response(jsonify(
-        {
-            'status': 'ok'
-        }
-    ), 200)
-    message = ''
-    #
-    # slack_payload = {
-    #     'attachments': [
-    #         {
-    #             'title':
-    #             'fallback': message,
-    #             'color': 'danger'
-    #         }
-    #     ]
-    # }
-    #
-    # return requests.post(
-    #     url=slack_url,
-    #     headers={
-    #         'Content-Type': 'application/json',
-    #         'Authorization': f'Bearer {slack_token}'
-    #     },
-    #     json=slack_payload
-    # )
-
-
 config = load_config()
 
 if 'slack' not in config:
@@ -84,11 +50,12 @@ if 'token' not in config['slack']:
     sys.exit(1)
 
 if 'url' in config['slack']:
-    slack_url = config['slack']['url']
+    slack_url = config['slack']['url'] + '/' + config['slack']['token']
 else:
     slack_url = 'https://slack.com/api/chat.postMessage'
 
 slack_token = config['slack']['token']
+slack_channel = config['slack']['channel']
 app = Flask(__name__)
 
 
@@ -125,7 +92,49 @@ def ping():
 
 @app.route(f'/', methods=['POST'])
 def webhook_handler():
-    response = send_slack_notification()
+    #sns_headers = dict(request.headers)
+    color = 'good'
+    message = ''
+    sns_payload = json.loads(request.data.decode('utf-8'))
+
+    try:
+        sns_message = json.loads(sns_payload['Message'])
+
+        for msg_item in sns_message.keys():
+            message += f'{msg_item}: {sns_message[msg_item]}\n'
+
+        if sns_message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE':
+            color = 'danger'
+    except Exception as e:
+        # Not a JSON message
+        message = sns_payload['Message']
+
+        if 'SubscribeURL' in sns_payload:
+            message += f"\n\nSubscribeURL: {sns_payload['SubscribeURL']}"
+
+    slack_payload = {
+        'attachments': [
+            {
+                'text': message,
+                'fallback': message,
+                'color': color
+            }
+        ],
+        'channel': f'#{slack_channel}'
+    }
+
+    if 'Subject' in sns_payload:
+        slack_payload['attachments'][0]['title'] = sns_payload['Subject']
+
+    response = requests.post(
+        url=slack_url,
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {slack_token}'
+        },
+        json=slack_payload
+    )
+
     slack_response = response.json()
 
     if response.status_code != 200:
