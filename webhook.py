@@ -7,13 +7,15 @@ import requests
 from flask import Flask, request, jsonify, make_response
 
 COLORS = {
-    'autoscaling:TEST_NOTIFICATION': 'good',
     'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
-
     'autoscaling:EC2_INSTANCE_TERMINATE': 'danger',
     'autoscaling:EC2_INSTANCE_TERMINATE_ERROR': 'danger',
     'autoscaling:EC2_INSTANCE_LAUNCH_ERROR': 'danger',
 }
+
+EXCLUDE = [
+    'autoscaling:TEST_NOTIFICATION'
+]
 
 
 def get_args():
@@ -120,6 +122,14 @@ def webhook_handler():
 
         if 'SubscribeURL' in sns_payload:
             message += f"\n\nSubscribeURL: {sns_payload['SubscribeURL']}"
+
+    # Don't send Slack notifications for excluded SNS event types
+    if sns_message['Event'] in EXCLUDE:
+        return make_response(jsonify(
+            {
+                'status': 'ok'
+            }
+        ), 200)
 
     slack_payload = {
         'attachments': [
