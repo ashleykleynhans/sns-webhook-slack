@@ -6,6 +6,15 @@ import yaml
 import requests
 from flask import Flask, request, jsonify, make_response
 
+COLORS = {
+    'autoscaling:TEST_NOTIFICATION': 'good',
+    'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
+
+    'autoscaling:EC2_INSTANCE_TERMINATE': 'danger',
+    'autoscaling:EC2_INSTANCE_TERMINATE_ERROR': 'danger',
+    'autoscaling:EC2_INSTANCE_LAUNCH_ERROR': 'danger',
+}
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -103,8 +112,8 @@ def webhook_handler():
         for msg_item in sns_message.keys():
             message += f'{msg_item}: {sns_message[msg_item]}\n'
 
-        if sns_message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE':
-            color = 'danger'
+        if sns_message['Event'] in COLORS:
+            color = COLORS[sns_message['Event']]
     except Exception as e:
         # Not a JSON message
         message = sns_payload['Message']
