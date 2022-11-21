@@ -90,7 +90,6 @@ def influxdb_log(message):
             point = Point('spot_termination') \
                 .tag('availability_zone', message['Details']['Availability Zone']) \
                 .tag('autoscaling_group', asg_name) \
-                .tag('start_time', message['StartTime']) \
                 .field('count', 1)
 
             write_api = client.write_api(write_options=SYNCHRONOUS)
