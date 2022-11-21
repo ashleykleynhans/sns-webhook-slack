@@ -5,6 +5,8 @@ import argparse
 import yaml
 import requests
 from flask import Flask, request, jsonify, make_response
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 COLORS = {
     'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
@@ -70,6 +72,40 @@ slack_channel = config['slack']['channel']
 app = Flask(__name__)
 
 
+def influxdb_log(message):
+    try:
+        if message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE' \
+                and 'taken out of service in response to an EC2 health check' in message['Cause']:
+            client = InfluxDBClient(
+                url=config['influxdb']['url'],
+                token=config['influxdb']['token'],
+                org=config['influxdb']['org']
+            )
+
+            asg_name = message['AutoScalingGroupName']
+            asg_name = asg_name.split('-')
+            asg_name.pop()
+            asg_name = ('-').join(asg_name)
+
+            point = Point('spot_termination') \
+                .tag('availability_zone', message['Details']['Availability Zone']) \
+                .tag('autoscaling_group', asg_name) \
+                .tag('start_time', message['StartTime']) \
+                .field('count', 1)
+
+            write_api = client.write_api(write_options=SYNCHRONOUS)
+            write_api.write(
+                config['influxdb']['bucket'],
+                config['influxdb']['org'],
+                point,
+                write_precision=WritePrecision.S
+            )
+
+            client.close()
+    except Exception as e:
+        pass
+
+
 @app.errorhandler(404)
 def not_found(error):
     return make_response(jsonify(
@@ -120,8 +156,10 @@ def webhook_handler():
         # Not a JSON message
         message = sns_payload['Message']
 
-        if 'SubscribeURL' in sns_payload:
-            message += f"\n\nSubscribeURL: {sns_payload['SubscribeURL']}"
+    if 'SubscribeURL' in sns_payload:
+        message += f"\n\nSubscribeURL: {sns_payload['SubscribeURL']}"
+
+    influxdb_log(sns_message)
 
     # Don't send Slack notifications for excluded SNS event types
     if sns_message['Event'] in EXCLUDE:
