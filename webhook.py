@@ -100,8 +100,8 @@ def influxdb_log(message):
 
             write_api = client.write_api(write_options=SYNCHRONOUS)
             write_api.write(
-                config['influxdb']['bucket'],
-                config['influxdb']['org'],
+                influxdb_config['bucket'],
+                influxdb_config['org'],
                 point,
                 write_precision=WritePrecision.S
             )
