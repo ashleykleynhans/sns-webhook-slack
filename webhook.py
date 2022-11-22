@@ -76,16 +76,22 @@ def influxdb_log(message):
     try:
         if message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE' \
                 and 'taken out of service in response to an EC2 health check' in message['Cause']:
-            client = InfluxDBClient(
-                url=config['influxdb']['url'],
-                token=config['influxdb']['token'],
-                org=config['influxdb']['org']
-            )
-
+            print('Logging to InfluxDB')
             asg_name = message['AutoScalingGroupName']
             asg_name = asg_name.split('-')
             asg_name.pop()
             asg_name = ('-').join(asg_name)
+
+            if 'test' in asg_name:
+                influxdb_config = config['influxdb']['test']
+            else:
+                influxdb_config = config['influxdb']['prod']
+
+            client = InfluxDBClient(
+                url=influxdb_config['url'],
+                token=influxdb_config['token'],
+                org=influxdb_config['org']
+            )
 
             point = Point('spot_termination') \
                 .tag('availability_zone', message['Details']['Availability Zone']) \
@@ -102,7 +108,7 @@ def influxdb_log(message):
 
             client.close()
     except Exception as e:
-        pass
+        print(f'Logging to InfluxDB failed: {e}')
 
 
 @app.errorhandler(404)
@@ -158,8 +164,6 @@ def webhook_handler():
     if 'SubscribeURL' in sns_payload:
         message += f"\n\nSubscribeURL: {sns_payload['SubscribeURL']}"
 
-    influxdb_log(sns_message)
-
     # Don't send Slack notifications for excluded SNS event types
     if sns_message['Event'] in EXCLUDE:
         return make_response(jsonify(
@@ -167,6 +171,8 @@ def webhook_handler():
                 'status': 'ok'
             }
         ), 200)
+
+    influxdb_log(sns_message)
 
     slack_payload = {
         'attachments': [
