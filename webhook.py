@@ -74,7 +74,7 @@ app = Flask(__name__)
 
 def influxdb_log(message):
     try:
-        if message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE' \
+        if 'Event' in message and message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE' \
                 and 'taken out of service in response to an EC2 health check' in message['Cause']:
             print('Logging to InfluxDB')
             asg_name = message['AutoScalingGroupName']
@@ -144,7 +144,6 @@ def ping():
 
 @app.route(f'/', methods=['POST'])
 def webhook_handler():
-    #sns_headers = dict(request.headers)
     color = 'good'
     message = ''
     sns_payload = json.loads(request.data.decode('utf-8'))
@@ -155,8 +154,11 @@ def webhook_handler():
         for msg_item in sns_message.keys():
             message += f'{msg_item}: {sns_message[msg_item]}\n'
 
-        if sns_message['Event'] in COLORS:
+        if 'Event' in sns_message and sns_message['Event'] in COLORS:
             color = COLORS[sns_message['Event']]
+        elif 'detail-type' in sns_message and \
+                sns_message['detail-type'] == 'EC2 Spot Instance Interruption Warning':
+            color = 'danger'
     except Exception as e:
         # Not a JSON message
         message = sns_payload['Message']
@@ -165,7 +167,7 @@ def webhook_handler():
         message += f"\n\nSubscribeURL: {sns_payload['SubscribeURL']}"
 
     # Don't send Slack notifications for excluded SNS event types
-    if sns_message['Event'] in EXCLUDE:
+    if 'Event' in sns_message and sns_message['Event'] in EXCLUDE:
         return make_response(jsonify(
             {
                 'status': 'ok'
@@ -187,6 +189,8 @@ def webhook_handler():
 
     if 'Subject' in sns_payload:
         slack_payload['attachments'][0]['title'] = sns_payload['Subject']
+    elif 'detail-type' in sns_message:
+        slack_payload['attachments'][0]['title'] = sns_message['detail-type']
 
     response = requests.post(
         url=slack_url,
