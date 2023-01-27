@@ -62,13 +62,17 @@ if 'token' not in config['slack']:
     print("'token' not found in 'slack' section of config")
     sys.exit(1)
 
+if 'channels' not in config['slack']:
+    print("'channels' not found in 'slack' section of config")
+    sys.exit(1)
+
 if 'url' in config['slack']:
     slack_url = config['slack']['url'] + '/' + config['slack']['token']
 else:
     slack_url = 'https://slack.com/api/chat.postMessage'
 
 slack_token = config['slack']['token']
-slack_channel = config['slack']['channel']
+slack_channels = config['slack']['channels']
 app = Flask(__name__)
 
 
@@ -175,6 +179,10 @@ def webhook_handler():
         ), 200)
 
     influxdb_log(sns_message)
+
+    arn = sns_payload['TopicArn'].split(':')
+    region = arn[3]
+    slack_channel = slack_channels[region]
 
     slack_payload = {
         'attachments': [
