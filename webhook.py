@@ -5,8 +5,6 @@ import argparse
 import yaml
 import requests
 from flask import Flask, request, jsonify, make_response
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
 
 COLORS = {
     'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
@@ -76,45 +74,6 @@ slack_channels = config['slack']['channels']
 app = Flask(__name__)
 
 
-def influxdb_log(message):
-    try:
-        if 'Event' in message and message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE' \
-                and 'taken out of service in response to an EC2 health check' in message['Cause']:
-            print('Logging to InfluxDB')
-            asg_name = message['AutoScalingGroupName']
-            asg_name = asg_name.split('-')
-            asg_name.pop()
-            asg_name = ('-').join(asg_name)
-
-            if 'test' in asg_name:
-                influxdb_config = config['influxdb']['test']
-            else:
-                influxdb_config = config['influxdb']['prod']
-
-            client = InfluxDBClient(
-                url=influxdb_config['url'],
-                token=influxdb_config['token'],
-                org=influxdb_config['org']
-            )
-
-            point = Point('spot_termination') \
-                .tag('availability_zone', message['Details']['Availability Zone']) \
-                .tag('autoscaling_group', asg_name) \
-                .field('count', 1)
-
-            write_api = client.write_api(write_options=SYNCHRONOUS)
-            write_api.write(
-                influxdb_config['bucket'],
-                influxdb_config['org'],
-                point,
-                write_precision=WritePrecision.S
-            )
-
-            client.close()
-    except Exception as e:
-        print(f'Logging to InfluxDB failed: {e}')
-
-
 @app.errorhandler(404)
 def not_found(error):
     return make_response(jsonify(
@@ -177,8 +136,6 @@ def webhook_handler():
                 'status': 'ok'
             }
         ), 200)
-
-    influxdb_log(sns_message)
 
     arn = sns_payload['TopicArn'].split(':')
     region = arn[3]
