@@ -120,7 +120,8 @@ def webhook_handler():
         if 'Event' in sns_message and sns_message['Event'] in COLORS:
             color = COLORS[sns_message['Event']]
         elif 'detail-type' in sns_message and \
-                sns_message['detail-type'] == 'EC2 Spot Instance Interruption Warning':
+                sns_message['detail-type'] == 'AWS Health Event' and \
+                sns_message['detail']['eventTypeCategory'] == 'issue':
             color = 'danger'
     except Exception as e:
         # Not a JSON message
