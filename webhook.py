@@ -6,6 +6,9 @@ import yaml
 import requests
 from flask import Flask, request, jsonify, make_response
 
+NOTIFICATION_TYPE_DEFAULT = 'default'
+NOTIFICATION_TYPE_HEALTH = 'health'
+
 COLORS = {
     'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
     'autoscaling:EC2_INSTANCE_TERMINATE': 'danger',
@@ -110,19 +113,46 @@ def webhook_handler():
     color = 'good'
     message = ''
     sns_payload = json.loads(request.data.decode('utf-8'))
+    notification_type = NOTIFICATION_TYPE_DEFAULT
 
     try:
-        sns_message = json.loads(sns_payload['Message'])
-
-        for msg_item in sns_message.keys():
-            message += f'{msg_item}: {sns_message[msg_item]}\n'
+        sns_message = sns_payload['Message']
+        sns_message = json.loads(sns_message)
 
         if 'Event' in sns_message and sns_message['Event'] in COLORS:
             color = COLORS[sns_message['Event']]
-        elif 'detail-type' in sns_message and \
-                sns_message['detail-type'] == 'AWS Health Event' and \
-                sns_message['detail']['eventTypeCategory'] == 'issue':
-            color = 'danger'
+        elif 'detail-type' in sns_message and sns_message['detail-type'] == 'AWS Health Event':
+            notification_type = NOTIFICATION_TYPE_HEALTH
+
+            if sns_message['detail']['eventTypeCategory'] == 'issue':
+                color = 'danger'
+
+        if notification_type == NOTIFICATION_TYPE_HEALTH:
+            message += f'**Account:** {sns_message["account"]}\n'
+            message += f'**Region:** {sns_message["region"]}\n'
+
+            if sns_message["resources"]:
+                message += f'**Resources:** {",".join(sns_message["resources"])}\n'
+
+            message += f'**Service:** {sns_message["detail"]["service"]}\n'
+            message += f'**Event Type Code:** {sns_message["detail"]["eventTypeCode"]}\n'
+            message += f'**Event Type Category:** {sns_message["detail"]["eventTypeCategory"]}\n'
+            message += f'**Start Time:** {sns_message["detail"]["startTime"]}\n'
+            message += f'**End Time:** {sns_message["detail"]["endTime"]}\n'
+            message += '**Description:**\n'
+
+            for description_item in sns_message['detail']['eventDescription']:
+                if description_item['language'] == 'en_US':
+                    message += description_item['latestDescription'] + '\n'
+
+                if 'affectedEntities' in sns_message['detail']:
+                    message += '**Affected Entities:**\n'
+
+                    for affected_enttity in sns_message['detail']['affectedEntities']:
+                        message += f'  * {affected_enttity["entityValue"]}\n'
+        else:
+            for msg_item in sns_message.keys():
+                message += f'{msg_item}: {sns_message[msg_item]}\n'
     except Exception as e:
         # Not a JSON message
         message = sns_payload['Message']
@@ -140,7 +170,7 @@ def webhook_handler():
 
     arn = sns_payload['TopicArn'].split(':')
     region = arn[3]
-    slack_channel = slack_channels[region]
+    slack_channel = slack_channels[notification_type][region]
 
     slack_payload = {
         'attachments': [

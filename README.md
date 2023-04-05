@@ -36,8 +36,17 @@ brew upgrade python@3.9
 ---
 slack:
   token: "<SLACK_TOKEN>"
-  channel: aws-sns-alerts
+  channels:
+     default:
+        us-east-1: aws-alerts-prod
+        us-east-2: aws-alerts-test
+     health:
+        us-east-1: aws-health-prod
+        us-east-2: aws-health-test
 ```
+
+The `default` channels will be used for regular AWS notifications
+and the `health` channels witll be used for AWS health events.
 
 ## AWS SNS Configuration
 
