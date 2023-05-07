@@ -40,13 +40,33 @@ slack:
      default:
         us-east-1: aws-alerts-prod
         us-east-2: aws-alerts-test
+     autoscaling:
+        us-east-1: aws-health-prod
+        us-east-2: aws-health-test
      health:
         us-east-1: aws-health-prod
         us-east-2: aws-health-test
+
+influxdb:
+   prod:
+      url: http://prod-influxdb.example.com:8086
+      token: "<INFLUXDB_TOKEN>"
+      org: YourOrg
+      bucket: BucketName
+   test:
+      url: http://test-influxdb.example.com:8086
+      token: "<INFLUXDB_TOKEN>"
+      org: YourOrg
+      bucket: BucketName
+
+environments:
+   us-east-1: prod
+   us-east-2: test
 ```
 
-The `default` channels will be used for regular AWS notifications
-and the `health` channels witll be used for AWS health events.
+The `default` channels will be used for regular AWS notifications,
+the `autoscaling` channels will be used for Auto Scaling events,
+and the `health` channels will be used for AWS health events.
 
 ## AWS SNS Configuration
 

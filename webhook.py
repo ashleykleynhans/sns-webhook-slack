@@ -4,7 +4,10 @@ import sys
 import argparse
 import yaml
 import requests
+import re
 from flask import Flask, request, jsonify, make_response
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 NOTIFICATION_TYPE_DEFAULT = 'default'
 NOTIFICATION_TYPE_HEALTH = 'health'
@@ -76,6 +79,65 @@ else:
 slack_token = config['slack']['token']
 slack_channels = config['slack']['channels']
 app = Flask(__name__)
+
+
+def influxdb_log(message):
+    try:
+        if 'influxdb' not in config:
+            return
+
+        match = re.search(r'^([a-z]+-[a-z]+-\d+)', message['AvailabilityZone'])
+
+        if match:
+            region = match.group(1)
+        else:
+            return
+
+        if region in config['environments']:
+            count_before = 0
+            count_after = 0
+
+            matches = re.findall(r'increasing the capacity from (\d+) to (\d+)', message['Cause'])
+
+            if matches:
+                count_before = matches[0][0]
+                count_after = matches[0][1]
+
+            if count_before == 0 and count_after == 0:
+                return
+
+            asg = message['AutoScalingGroupName'].split('-')
+            application = asg[0]
+
+            environment = config['environments'][region]
+            influxdb_config = config['influxdb'][environment]
+
+            print('Logging to InfluxDB')
+
+            client = InfluxDBClient(
+                url=influxdb_config['url'],
+                token=influxdb_config['token'],
+                org=influxdb_config['org']
+            )
+
+            point = Point('ec2_autoscaling') \
+                .tag('application', application) \
+                .field('availability_zone', message['AvailabilityZone']) \
+                .field('autoscaling_group', message['AutoScalingGroupName']) \
+                .field('count_before', int(count_before)) \
+                .field('count_after', int(count_after))
+
+            write_api = client.write_api(write_options=SYNCHRONOUS)
+            write_api.write(
+                influxdb_config['bucket'],
+                influxdb_config['org'],
+                point,
+                write_precision=WritePrecision.S
+            )
+
+            client.close()
+    except Exception as e:
+        print(f'Logging to InfluxDB failed: {e}')
 
 
 @app.errorhandler(404)
@@ -156,13 +218,14 @@ def webhook_handler():
                         for affected_enttity in sns_message['detail']['affectedEntities']:
                             message += f'  * {affected_enttity["entityValue"]}\n'
             elif notification_type == NOTIFICATION_TYPE_AUTOSCALING:
-                # details = sns_message['Details']
+                sns_message['AvailabilityZone'] = sns_message['Details']['Availability Zone']
                 del sns_message['Details']
 
                 for msg_item in sns_message.keys():
                     message += f'**{msg_item}:** {sns_message[msg_item]}\n'
 
-
+                if sns_message['Event'] == 'autoscaling:EC2_INSTANCE_LAUNCH':
+                    influxdb_log(sns_message)
             else:
                 for msg_item in sns_message.keys():
                     message += f'{msg_item}: {sns_message[msg_item]}\n'
