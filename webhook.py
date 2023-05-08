@@ -97,11 +97,17 @@ def influxdb_log(message):
             count_before = 0
             count_after = 0
 
-            matches = re.findall(r'increasing the capacity from (\d+) to (\d+)', message['Cause'])
+            increasing_matches = re.findall(r'increasing the capacity from (\d+) to (\d+)', message['Cause'])
 
-            if matches:
-                count_before = matches[0][0]
-                count_after = matches[0][1]
+            if increasing_matches:
+                count_before = increasing_matches[0][0]
+                count_after = increasing_matches[0][1]
+            else:
+                decreasing_matches = re.findall(r'shrinking the capacity from (\d+) to (\d+)', message['Cause'])
+
+                if decreasing_matches:
+                    count_before = decreasing_matches[0][0]
+                    count_after = decreasing_matches[0][1]
 
             if count_before == 0 and count_after == 0:
                 return
