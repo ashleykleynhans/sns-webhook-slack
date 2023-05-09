@@ -230,7 +230,7 @@ def webhook_handler():
                 for msg_item in sns_message.keys():
                     message += f'**{msg_item}:** {sns_message[msg_item]}\n'
 
-                if sns_message['Event'] == 'autoscaling:EC2_INSTANCE_LAUNCH':
+                if sns_message['Event'] == 'autoscaling:EC2_INSTANCE_LAUNCH' or sns_message['Event'] == 'autoscaling:EC2_INSTANCE_TERMINATE':
                     influxdb_log(sns_message)
             else:
                 for msg_item in sns_message.keys():
