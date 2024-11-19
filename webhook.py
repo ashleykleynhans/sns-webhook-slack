@@ -12,6 +12,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 NOTIFICATION_TYPE_DEFAULT = 'default'
 NOTIFICATION_TYPE_HEALTH = 'health'
 NOTIFICATION_TYPE_AUTOSCALING = 'autoscaling'
+NOTIFICATION_TYPE_SUPPORT = 'support'
 
 COLORS = {
     'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
@@ -194,6 +195,8 @@ def webhook_handler():
 
                 if 'autoscaling:' in sns_message['Event']:
                     notification_type = NOTIFICATION_TYPE_AUTOSCALING
+            elif 'detail-type' in sns_message and sns_message['detail-type'] == 'Support Case Update':
+                notification_type = NOTIFICATION_TYPE_SUPPORT
             elif 'detail-type' in sns_message and sns_message['detail-type'] == 'AWS Health Event':
                 notification_type = NOTIFICATION_TYPE_HEALTH
 
