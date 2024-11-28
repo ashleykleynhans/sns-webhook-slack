@@ -13,6 +13,7 @@ NOTIFICATION_TYPE_DEFAULT = 'default'
 NOTIFICATION_TYPE_HEALTH = 'health'
 NOTIFICATION_TYPE_AUTOSCALING = 'autoscaling'
 NOTIFICATION_TYPE_SUPPORT = 'support'
+NOTIFICATION_TYPE_SAVINGS_PLANS = 'savings-plans'
 
 COLORS = {
     'autoscaling:EC2_INSTANCE_LAUNCH': 'good',
@@ -197,6 +198,8 @@ def webhook_handler():
                     notification_type = NOTIFICATION_TYPE_AUTOSCALING
             elif 'detail-type' in sns_message and sns_message['detail-type'] == 'Support Case Update':
                 notification_type = NOTIFICATION_TYPE_SUPPORT
+            elif 'detail-type' in sns_message and sns_message['detail-type'] == 'Savings Plans State Change Alert':
+                notification_type = NOTIFICATION_TYPE_SAVINGS_PLANS
             elif 'detail-type' in sns_message and sns_message['detail-type'] == 'AWS Health Event':
                 notification_type = NOTIFICATION_TYPE_HEALTH
 
