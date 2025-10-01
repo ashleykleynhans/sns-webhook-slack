@@ -6,3 +6,4 @@ awscli
 influxdb-client
 requests
 setuptools
+cryptography
