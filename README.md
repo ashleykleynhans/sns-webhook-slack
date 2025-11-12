@@ -36,11 +36,38 @@ slack:
         us-east-1: aws-alerts-prod
         us-east-2: aws-alerts-test
      autoscaling:
-        us-east-1: aws-health-prod
-        us-east-2: aws-health-test
+        us-east-1: aws-autoscaling-prod
+        us-east-2: aws-autoscaling-test
      health:
         us-east-1: aws-health-prod
         us-east-2: aws-health-test
+     acm:
+        us-east-1: aws-security-prod
+        us-east-2: aws-security-test
+     rekognition:
+        us-east-1: aws-alerts-prod
+        us-east-2: aws-alerts-test
+     security-hub:
+        us-east-1: aws-security-prod
+        us-east-2: aws-security-test
+     trusted-advisor:
+        us-east-1: aws-alerts-prod
+        us-east-2: aws-alerts-test
+     config:
+        us-east-1: aws-compliance-prod
+        us-east-2: aws-compliance-test
+     cloudwatch:
+        us-east-1: aws-alerts-prod
+        us-east-2: aws-alerts-test
+     aws-service:
+        us-east-1: aws-alerts-prod
+        us-east-2: aws-alerts-test
+     support:
+        us-east-1: aws-support-prod
+        us-east-2: aws-support-test
+     savings-plans:
+        us-east-1: aws-billing-prod
+        us-east-2: aws-billing-test
 
 influxdb:
    prod:
@@ -59,9 +86,24 @@ environments:
    us-east-2: test
 ```
 
-The `default` channels will be used for regular AWS notifications,
-the `autoscaling` channels will be used for Auto Scaling events,
-and the `health` channels will be used for AWS health events.
+## Supported Notification Types
+
+The webhook now supports the following AWS notification types with custom formatting:
+
+- **`default`**: Regular AWS notifications (fallback for unrecognized types)
+- **`autoscaling`**: EC2 Auto Scaling events (launch, terminate, etc.)
+- **`health`**: AWS Health Dashboard events
+- **`acm`**: ACM Certificate notifications (expiring, renewal status)
+- **`rekognition`**: Amazon Rekognition notifications (EOL, deprecation)
+- **`security-hub`**: AWS Security Hub findings
+- **`trusted-advisor`**: AWS Trusted Advisor check results
+- **`config`**: AWS Config compliance change notifications
+- **`cloudwatch`**: CloudWatch Alarm state changes
+- **`aws-service`**: Generic AWS service events from EventBridge
+- **`support`**: AWS Support case updates
+- **`savings-plans`**: AWS Savings Plans alerts
+
+Each notification type can be routed to different Slack channels per region. If a specific notification type or region is not configured, it will fall back to the `default` channel.
 
 ## AWS SNS Configuration
 

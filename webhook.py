@@ -85,6 +85,13 @@ class NotificationTypes:
     AUTOSCALING: str = 'autoscaling'
     SUPPORT: str = 'support'
     SAVINGS_PLANS: str = 'savings-plans'
+    ACM: str = 'acm'
+    REKOGNITION: str = 'rekognition'
+    AWS_SERVICE: str = 'aws-service'
+    SECURITY_HUB: str = 'security-hub'
+    TRUSTED_ADVISOR: str = 'trusted-advisor'
+    CONFIG: str = 'config'
+    CLOUDWATCH: str = 'cloudwatch'
 
 
 # Constants
@@ -455,14 +462,75 @@ def _determine_notification_type(sns_message: Dict[str, Any]) -> tuple[str, str]
         if 'autoscaling:' in sns_message['Event']:
             notification_type = NOTIFICATION_TYPES.AUTOSCALING
     elif 'detail-type' in sns_message:
-        if sns_message['detail-type'] == 'Support Case Update':
+        detail_type = sns_message['detail-type']
+
+        # Support Cases
+        if detail_type == 'Support Case Update':
             notification_type = NOTIFICATION_TYPES.SUPPORT
-        elif sns_message['detail-type'] == 'Savings Plans State Change Alert':
+
+        # Savings Plans
+        elif detail_type == 'Savings Plans State Change Alert':
             notification_type = NOTIFICATION_TYPES.SAVINGS_PLANS
-        elif sns_message['detail-type'] == 'AWS Health Event':
+
+        # AWS Health Events
+        elif detail_type == 'AWS Health Event':
             notification_type = NOTIFICATION_TYPES.HEALTH
             if sns_message.get('detail', {}).get('eventTypeCategory') == 'issue':
                 color = 'danger'
+
+        # ACM Certificate notifications
+        elif 'ACM' in detail_type or 'Certificate' in detail_type:
+            notification_type = NOTIFICATION_TYPES.ACM
+            # Certificate expiring or renewal failed is a warning
+            if any(keyword in detail_type for keyword in ['Expiration', 'Expiring', 'Failed', 'Error']):
+                color = 'warning'
+
+        # Rekognition notifications
+        elif 'Rekognition' in detail_type or detail_type == 'Amazon Rekognition End of Life Notice':
+            notification_type = NOTIFICATION_TYPES.REKOGNITION
+            # EOL notices are warnings
+            if 'End of Life' in detail_type or 'EOL' in detail_type or 'Deprecat' in detail_type:
+                color = 'warning'
+
+        # Security Hub findings
+        elif 'Security Hub' in detail_type or detail_type == 'Security Hub Findings - Imported':
+            notification_type = NOTIFICATION_TYPES.SECURITY_HUB
+            # Check severity
+            if sns_message.get('detail', {}).get('findings', [{}])[0].get('Severity', {}).get('Label') in ['CRITICAL', 'HIGH']:
+                color = 'danger'
+            elif sns_message.get('detail', {}).get('findings', [{}])[0].get('Severity', {}).get('Label') == 'MEDIUM':
+                color = 'warning'
+
+        # Trusted Advisor
+        elif 'Trusted Advisor' in detail_type:
+            notification_type = NOTIFICATION_TYPES.TRUSTED_ADVISOR
+            # Check status
+            status = sns_message.get('detail', {}).get('status', '').lower()
+            if status in ['error', 'red']:
+                color = 'danger'
+            elif status in ['warning', 'yellow']:
+                color = 'warning'
+
+        # AWS Config
+        elif 'Config' in detail_type or detail_type == 'Config Rules Compliance Change':
+            notification_type = NOTIFICATION_TYPES.CONFIG
+            # Non-compliant resources are warnings
+            if sns_message.get('detail', {}).get('newEvaluationResult', {}).get('complianceType') == 'NON_COMPLIANT':
+                color = 'danger'
+
+        # CloudWatch Alarms
+        elif 'CloudWatch Alarm' in detail_type or detail_type == 'CloudWatch Alarm State Change':
+            notification_type = NOTIFICATION_TYPES.CLOUDWATCH
+            # Alarm state determines color
+            alarm_state = sns_message.get('detail', {}).get('state', {}).get('value', '').upper()
+            if alarm_state == 'ALARM':
+                color = 'danger'
+            elif alarm_state == 'INSUFFICIENT_DATA':
+                color = 'warning'
+
+        # Generic AWS Service events
+        elif 'AWS' in detail_type and notification_type == NOTIFICATION_TYPES.DEFAULT:
+            notification_type = NOTIFICATION_TYPES.AWS_SERVICE
 
     return notification_type, color
 
@@ -503,7 +571,106 @@ def _format_message(sns_message: Dict[str, Any], notification_type: str) -> str:
         for msg_item in sns_message.keys():
             message += f'**{msg_item}:** {sns_message[msg_item]}\n'
 
+    elif notification_type == NOTIFICATION_TYPES.ACM:
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+
+        detail = sns_message.get('detail', {})
+        if 'DaysToExpiry' in detail:
+            message += f'**Days to Expiry:** {detail.get("DaysToExpiry", "N/A")}\n'
+        if 'CommonName' in detail:
+            message += f'**Certificate:** {detail.get("CommonName", "N/A")}\n'
+        if 'certificateArn' in detail:
+            message += f'**Certificate ARN:** {detail.get("certificateArn", "N/A")}\n'
+
+        # Include any other detail fields
+        for key, value in detail.items():
+            if key not in ['DaysToExpiry', 'CommonName', 'certificateArn']:
+                message += f'**{key}:** {value}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.REKOGNITION:
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+
+        detail = sns_message.get('detail', {})
+        for key, value in detail.items():
+            message += f'**{key}:** {value}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.SECURITY_HUB:
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+
+        findings = sns_message.get('detail', {}).get('findings', [])
+        if findings:
+            for finding in findings[:5]:  # Limit to first 5 findings
+                message += '\n**Finding:**\n'
+                message += f'  **Title:** {finding.get("Title", "N/A")}\n'
+                message += f'  **Severity:** {finding.get("Severity", {}).get("Label", "N/A")}\n'
+                message += f'  **Type:** {finding.get("Types", ["N/A"])[0] if finding.get("Types") else "N/A"}\n'
+                message += f'  **Description:** {finding.get("Description", "N/A")}\n'
+                if 'Resources' in finding:
+                    message += f'  **Resources:** {", ".join([r.get("Id", "N/A") for r in finding["Resources"][:3]])}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.TRUSTED_ADVISOR:
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+
+        detail = sns_message.get('detail', {})
+        message += f'**Check Name:** {detail.get("check-name", "N/A")}\n'
+        message += f'**Status:** {detail.get("status", "N/A")}\n'
+        message += f'**Resource ID:** {detail.get("resource_id", "N/A")}\n'
+
+        for key, value in detail.items():
+            if key not in ['check-name', 'status', 'resource_id']:
+                message += f'**{key}:** {value}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.CONFIG:
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+
+        detail = sns_message.get('detail', {})
+        message += f'**Config Rule:** {detail.get("configRuleName", "N/A")}\n'
+
+        new_result = detail.get('newEvaluationResult', {})
+        if new_result:
+            message += f'**Compliance Type:** {new_result.get("complianceType", "N/A")}\n'
+            message += f'**Resource Type:** {new_result.get("evaluationResultIdentifier", {}).get("evaluationResultQualifier", {}).get("resourceType", "N/A")}\n'
+            message += f'**Resource ID:** {new_result.get("evaluationResultIdentifier", {}).get("evaluationResultQualifier", {}).get("resourceId", "N/A")}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.CLOUDWATCH:
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+
+        detail = sns_message.get('detail', {})
+        message += f'**Alarm Name:** {detail.get("alarmName", "N/A")}\n'
+
+        state = detail.get('state', {})
+        message += f'**State:** {state.get("value", "N/A")}\n'
+        message += f'**Reason:** {state.get("reason", "N/A")}\n'
+
+        configuration = detail.get('configuration', {})
+        if 'description' in configuration:
+            message += f'**Description:** {configuration.get("description", "N/A")}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.AWS_SERVICE:
+        # Format generic AWS service events with structure
+        message += f'**Account:** {sns_message.get("account", "N/A")}\n'
+        message += f'**Region:** {sns_message.get("region", "N/A")}\n'
+        message += f'**Time:** {sns_message.get("time", "N/A")}\n'
+        message += f'**Source:** {sns_message.get("source", "N/A")}\n'
+
+        detail = sns_message.get('detail', {})
+        for key, value in detail.items():
+            message += f'**{key}:** {value}\n'
+
     else:
+        # Default formatter for unrecognized types
         for msg_item in sns_message.keys():
             message += f'{msg_item}: {sns_message[msg_item]}\n'
 
