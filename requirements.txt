@@ -7,3 +7,6 @@ influxdb-client
 requests
 setuptools
 cryptography
+pyyaml
+pytest
+pytest-cov

@@ -225,9 +225,6 @@ class SecurityValidator:
 
             # Check if signature fields are present
             if 'SigningCertURL' not in sns_payload or 'Signature' not in sns_payload:
-                # No signature fields - allow if verify_signatures is False
-                if not self.config.get('verify_signatures', False):
-                    return True, ""
                 return False, "Missing signature fields"
 
             # Rest of validation only if cryptography is available
@@ -984,7 +981,7 @@ def create_app(config: Config = None) -> Flask:
 try:
     config = load_config()
     app = create_app(config)
-except Exception as e:
+except Exception as e:  # pragma: no cover
     print(f"WARNING: Failed to load config, using defaults: {e}")
     app = create_app()
 

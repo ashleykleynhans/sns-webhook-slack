@@ -3,3 +3,5 @@ venv/*
 .vscode
 .idea
 config.yml
+__pycache__
+.coverage
