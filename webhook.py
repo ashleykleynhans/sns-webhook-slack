@@ -556,7 +556,9 @@ def _format_message(sns_message: Dict[str, Any], notification_type: str) -> str:
 
         for description_item in detail.get('eventDescription', []):
             if description_item.get('language') == 'en_US':
-                message += description_item.get('latestDescription', 'N/A') + '\n'
+                description = description_item.get('latestDescription', 'N/A')
+                description = description.replace('\\n', '\n')
+                message += description + '\n'
 
         if 'affectedEntities' in detail:
             message += '**Affected Entities:**\n'
