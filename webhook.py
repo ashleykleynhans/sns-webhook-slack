@@ -92,6 +92,7 @@ class NotificationTypes:
     TRUSTED_ADVISOR: str = 'trusted-advisor'
     CONFIG: str = 'config'
     CLOUDWATCH: str = 'cloudwatch'
+    DMS: str = 'dms'
 
 
 # Constants
@@ -454,6 +455,18 @@ def _determine_notification_type(sns_message: Dict[str, Any]) -> tuple[str, str]
     color = 'good'
     notification_type = NOTIFICATION_TYPES.DEFAULT
 
+    # DMS event notifications (plain JSON with 'Event Source' field)
+    if 'Event Source' in sns_message and sns_message['Event Source'] in (
+        'replication-instance', 'replication-task'
+    ):
+        notification_type = NOTIFICATION_TYPES.DMS
+        event_message = sns_message.get('Event Message', '').lower()
+        if 'failure' in event_message or 'failed' in event_message or 'error' in event_message:
+            color = 'danger'
+        elif 'stopped' in event_message or 'low storage' in event_message:
+            color = 'warning'
+        return notification_type, color
+
     if 'Event' in sns_message and sns_message['Event'] in COLORS:
         color = COLORS[sns_message['Event']]
         if 'autoscaling:' in sns_message['Event']:
@@ -656,6 +669,16 @@ def _format_message(sns_message: Dict[str, Any], notification_type: str) -> str:
         configuration = detail.get('configuration', {})
         if 'description' in configuration:
             message += f'**Description:** {configuration.get("description", "N/A")}\n'
+
+    elif notification_type == NOTIFICATION_TYPES.DMS:
+        message += f'**Event Source:** {sns_message.get("Event Source", "N/A")}\n'
+        message += f'**Source Id:** {sns_message.get("Source Id", "N/A")}\n'
+        message += f'**Event Message:** {sns_message.get("Event Message", "N/A")}\n'
+        message += f'**Event Time:** {sns_message.get("Event Time", "N/A")}\n'
+        if sns_message.get('Identifier Link'):
+            message += f'**Link:** {sns_message["Identifier Link"]}\n'
+        if sns_message.get('Event Id'):
+            message += f'**Event Id:** {sns_message["Event Id"]}\n'
 
     elif notification_type == NOTIFICATION_TYPES.AWS_SERVICE:
         # Format generic AWS service events with structure

@@ -1,6 +1,8 @@
 zappa_settings.json
 venv/*
+.venv/
 .vscode
+.claude
 .idea
 config.yml
 __pycache__

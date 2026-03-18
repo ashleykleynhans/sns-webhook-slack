@@ -218,6 +218,56 @@ class TestDetermineNotificationType:
         assert ntype == NOTIFICATION_TYPES.AWS_SERVICE
         assert color == 'good'
 
+    def test_dms_replication_instance(self):
+        msg = {
+            'Event Source': 'replication-instance',
+            'Event Message': 'Replication instance has enough storage.',
+            'Source Id': 'my-replication-instance',
+        }
+        ntype, color = _determine_notification_type(msg)
+        assert ntype == NOTIFICATION_TYPES.DMS
+        assert color == 'good'
+
+    def test_dms_replication_task(self):
+        msg = {
+            'Event Source': 'replication-task',
+            'Event Message': 'Replication task started',
+            'Source Id': 'my-task',
+        }
+        ntype, color = _determine_notification_type(msg)
+        assert ntype == NOTIFICATION_TYPES.DMS
+        assert color == 'good'
+
+    def test_dms_failure(self):
+        msg = {
+            'Event Source': 'replication-instance',
+            'Event Message': 'Replication instance failure detected',
+            'Source Id': 'my-instance',
+        }
+        ntype, color = _determine_notification_type(msg)
+        assert ntype == NOTIFICATION_TYPES.DMS
+        assert color == 'danger'
+
+    def test_dms_stopped(self):
+        msg = {
+            'Event Source': 'replication-task',
+            'Event Message': 'Replication task stopped',
+            'Source Id': 'my-task',
+        }
+        ntype, color = _determine_notification_type(msg)
+        assert ntype == NOTIFICATION_TYPES.DMS
+        assert color == 'warning'
+
+    def test_dms_low_storage(self):
+        msg = {
+            'Event Source': 'replication-instance',
+            'Event Message': 'Replication instance has low storage',
+            'Source Id': 'my-instance',
+        }
+        ntype, color = _determine_notification_type(msg)
+        assert ntype == NOTIFICATION_TYPES.DMS
+        assert color == 'warning'
+
     def test_default_no_detail_type(self):
         msg = {'some_key': 'some_value'}
         ntype, color = _determine_notification_type(msg)
@@ -488,6 +538,35 @@ class TestFormatMessage:
         }
         result = _format_message(msg, NOTIFICATION_TYPES.CLOUDWATCH)
         assert '**Description:**' not in result
+
+    def test_dms(self):
+        msg = {
+            'Event Source': 'replication-instance',
+            'Source Id': 'my-replication-instance',
+            'Event Message': 'Replication instance has enough storage.',
+            'Event Time': '2026-01-01 00:00:00.000',
+            'Identifier Link': 'https://console.aws.amazon.com/dms/v2/home?region=us-east-1',
+            'Event Id': 'https://docs.aws.amazon.com/dms/latest/userguide/CHAP_Events.html',
+        }
+        result = _format_message(msg, NOTIFICATION_TYPES.DMS)
+        assert '**Event Source:** replication-instance' in result
+        assert '**Source Id:** my-replication-instance' in result
+        assert '**Event Message:** Replication instance has enough storage.' in result
+        assert '**Event Time:** 2026-01-01 00:00:00.000' in result
+        assert '**Link:** https://console.aws.amazon.com/dms/v2/home?region=us-east-1' in result
+        assert '**Event Id:**' in result
+
+    def test_dms_minimal(self):
+        msg = {
+            'Event Source': 'replication-task',
+            'Source Id': 'my-task',
+            'Event Message': 'Task started',
+        }
+        result = _format_message(msg, NOTIFICATION_TYPES.DMS)
+        assert '**Event Source:** replication-task' in result
+        assert '**Source Id:** my-task' in result
+        assert '**Link:**' not in result
+        assert '**Event Id:**' not in result
 
     def test_aws_service(self):
         msg = {
