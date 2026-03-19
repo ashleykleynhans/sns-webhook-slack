@@ -456,8 +456,9 @@ def _determine_notification_type(sns_message: Dict[str, Any]) -> tuple[str, str]
     notification_type = NOTIFICATION_TYPES.DEFAULT
 
     # DMS event notifications (plain JSON with 'Event Source' field)
-    if 'Event Source' in sns_message and sns_message['Event Source'] in (
-        'replication-instance', 'replication-task'
+    if 'Event Source' in sns_message and (
+        sns_message['Event Source'] in ('replication-instance', 'replication-task')
+        or 'DMS' in sns_message.get('Event Message', '')
     ):
         notification_type = NOTIFICATION_TYPES.DMS
         event_message = sns_message.get('Event Message', '').lower()
